@@ -16,7 +16,6 @@ GREEN = (0, 255, 0)
 GRAY = (200, 200, 200)
 ORANGE = (255, 165, 0)
 
-
 CELL_SIZE = 50
 FPS = 10
 
@@ -86,12 +85,6 @@ def display_agents_info(agents):
         print(f"Agent ID: {agent_id}, Type: {agent_type}, Position: {position}")
     print("-" * 30)
 
-
-
-
-
-
-
 # Visualization
 def draw_environment(screen, env, agents):
     screen.fill(WHITE)
@@ -124,7 +117,7 @@ def draw_environment(screen, env, agents):
 
                 # Add lock symbol for treasures that are not open
                 if not treasure.isOpen():
-                    lock_text = font.render("*", True, BLACK)  # "L" for locked
+                    lock_text = font.render("*", True, BLACK)
                     lock_rect = lock_text.get_rect(center=(treasure_rect.centerx, treasure_rect.centery - CELL_SIZE // 6))
                     screen.blit(lock_text, lock_rect)
 
@@ -140,125 +133,104 @@ def draw_environment(screen, env, agents):
         else:
             color = BLUE
         # Draw black outline
-        pygame.draw.circle(screen, BLACK, center, CELL_SIZE // 3 + 2)  # Slightly larger circle for outline
-        pygame.draw.circle(screen, color, center, CELL_SIZE // 3)  # Agent's colored circle
+        pygame.draw.circle(screen, BLACK, center, CELL_SIZE // 3 + 2)
+        pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
         
         # Draw "A" for the agent
         agent_text = font.render("A", True, BLACK)
         text_rect = agent_text.get_rect(center=center)
         screen.blit(agent_text, text_rect)
 
-        # Draw backpack value below the agent
-        if isinstance(agent, MyAgentChest):
-            continue
-        backpack_value = agent.backPack  
-        backpack_text = font.render(str(backpack_value), True, BLACK)
-        backpack_rect = backpack_text.get_rect(center=(center[0], center[1] + CELL_SIZE // 4))
-        screen.blit(backpack_text, backpack_rect)
-
     pygame.display.flip()
+
+# Helper function: Execute a single agent's task
+def execute_agent_task(agent, target_treasure, screen, env, agents):
+    current_x, current_y = agent.getPos()
+    target_x, target_y = target_treasure
+
+    while (current_x, current_y) != (target_x, target_y):
+        if current_x < target_x:
+            next_x = current_x + 1
+        elif current_x > target_x:
+            next_x = current_x - 1
+        else:
+            next_x = current_x
+
+        if current_y < target_y:
+            next_y = current_y + 1
+        elif current_y > target_y:
+            next_y = current_y - 1
+        else:
+            next_y = current_y
+
+        agent.move(current_x, current_y, next_x, next_y)
+        draw_environment(screen, env, agents)
+        pygame.time.wait(500)
+
+        current_x, current_y = next_x, next_y
+
+    agent.open()
+    draw_environment(screen, env, agents)
+    pygame.time.wait(1000)
+
 def trash():
     pygame.init()
     env, agents = loadFileConfig("env1.txt")
-    
-    # Display agents info
     display_agents_info(agents)
-    
+
     screen = pygame.display.set_mode((env.tailleY * CELL_SIZE, env.tailleX * CELL_SIZE))
     pygame.display.set_caption("Multi-Agent Treasure Hunt")
     clock = pygame.time.Clock()
 
-    # Draw the initial state
     draw_environment(screen, env, agents)
-    pygame.time.wait(2000)  # Pause to observe the initial state
+    pygame.time.wait(2000)
 
-   # treasure_generation_interval = 10  # Every 100 frames (or adjust as needed)
-    #frame_count = 0
-    horizon = 100  # Total steps in the simulation
+    locked_treasures = [
+        (x, y) for x in range(env.tailleX) for y in range(env.tailleY)
+        if env.grilleTres[x][y] is not None and not env.grilleTres[x][y].isOpen()
+    ]
 
-    # Perform the sequence of actions
+    assigned_treasures = set()
+
+    def find_nearest_treasure(agent, treasures):
+        agent_pos = agent.getPos()
+        nearest_treasure = None
+        min_distance = float('inf')
+        for treasure in treasures:
+            if treasure not in assigned_treasures:
+                distance = abs(agent_pos[0] - treasure[0]) + abs(agent_pos[1] - treasure[1])
+                if distance < min_distance:
+                    nearest_treasure = treasure
+                    min_distance = distance
+        return nearest_treasure
+
+    def agent_protocol(agent, other_agent):
+        target_treasure = find_nearest_treasure(agent, locked_treasures)
+        if target_treasure is not None:
+            assigned_treasures.add(target_treasure)
+            agent.send(other_agent.getId(), f"Target:{target_treasure}")
+            print(f"{agent.getId()} sent to {other_agent.getId()}: Target:{target_treasure}")
+            return target_treasure
+        return None
+
     try:
-        # Actions for agent0
-        agents.get("agent0").move(7, 4, 7, 3)
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
+        agent0 = agents.get("agent0")
+        agent1 = agents.get("agent1")
 
-        agents.get("agent0").move(7, 3, 6, 3)
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
+        for _ in range(len(locked_treasures)):
+            target0 = agent_protocol(agent0, agent1)
+            if target0:
+                execute_agent_task(agent0, target0, screen, env, agents)
 
-        agents.get("agent0").open()
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
-
-        print(env)  # Debug print to see the environment's state in the console
-
-        agents.get("agent0").move(6, 3, 7, 3)
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
-
-        print(env)  # Debug print after moving back
-
-        # Actions for agent4
-        agents.get("agent4").move(6, 7, 6, 6)
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
-
-        agents.get("agent4").move(6, 6, 6, 5)
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
-
-        agents.get("agent4").move(6, 5, 6, 4)
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
-
-        agents.get("agent4").move(6, 4, 6, 3)
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
-
-        agents.get("agent4").send("agent0", "Hello, I am sending a message to agent0")
-        agents.get("agent0").readMail()
-
-        print(env)  # Debug print before loading
-
-        agents.get("agent4").load(env)  # Load treasure
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
-        
-
-        agents.get("agent4").move(6, 3, 5, 3)
-        draw_environment(screen, env, agents)
-        pygame.time.wait(1000)
-        print(agents.get("agent4"))  # Debug print after loading
-
+            target1 = agent_protocol(agent1, agent0)
+            if target1:
+                execute_agent_task(agent1, target1, screen, env, agents)
 
     except Exception as e:
         print(f"Error during execution: {e}")
 
-    # Keep the window open to observe
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:  # Exit on window close
-                running = False
-
-       # Generate new treasures every 10 steps
-        # make the agents execute their plans
-        # for t in range(horizon):
-        #     if(t%10 == 0):
-        #         env.gen_new_treasures(random.randint(0,5), 7)
-        #         draw_environment(screen, env, agents)
-        
-        #draw_environment(screen, env, agents)
-        #pygame.time.wait(3000)  # 500 ms delay per step (adjust as needed)
-
-
-
-
-        clock.tick(FPS)
-
+    print("\nSimulation complete. Closing...")
     pygame.quit()
-
 
 if __name__ == "__main__":
     trash()
