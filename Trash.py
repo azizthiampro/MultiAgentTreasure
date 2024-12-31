@@ -5,6 +5,7 @@ from MyAgentChest import MyAgentChest
 from MyAgentStones import MyAgentStones
 from Treasure import Treasure
 import random
+from heapq import heappush, heappop
 
 # Colors
 WHITE = (255, 255, 255)
@@ -143,36 +144,71 @@ def draw_environment(screen, env, agents):
 
     pygame.display.flip()
 
-# Helper function: Execute a single agent's task
+# A* Pathfinding
+def a_star_search(start, goal, env):
+    def heuristic(a, b):
+        dx = abs(a[0] - b[0])
+        dy = abs(a[1] - b[1])
+        return dx + dy + (1.414 - 2) * min(dx, dy)  # Manhattan + diagonal
+
+    neighbors = [
+        (-1, 0), (1, 0), (0, -1), (0, 1),  # Cardinal directions
+        (-1, -1), (-1, 1), (1, -1), (1, 1)  # Diagonal directions
+    ]
+
+    open_set = []
+    heappush(open_set, (0, start))
+    came_from = {}
+    g_score = {start: 0}
+    f_score = {start: heuristic(start, goal)}
+
+    while open_set:
+        _, current = heappop(open_set)
+
+        if current == goal:
+            path = []
+            while current in came_from:
+                path.append(current)
+                current = came_from[current]
+            path.reverse()
+            return path
+
+        for dx, dy in neighbors:
+            neighbor = (current[0] + dx, current[1] + dy)
+            if neighbor[0] < 0 or neighbor[0] >= env.tailleX or neighbor[1] < 0 or neighbor[1] >= env.tailleY:
+                continue
+            if env.grilleAgent[neighbor[0]][neighbor[1]] is not None:
+                continue
+
+            tentative_g_score = g_score[current] + (1.414 if dx != 0 and dy != 0 else 1)
+
+            if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g_score
+                f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
+                heappush(open_set, (f_score[neighbor], neighbor))
+
+    return []
+
+# Execute agent task with A*
 def execute_agent_task(agent, target_treasure, screen, env, agents):
-    current_x, current_y = agent.getPos()
-    target_x, target_y = target_treasure
+    current_pos = agent.getPos()
+    path = a_star_search(current_pos, target_treasure, env)
 
-    while (current_x, current_y) != (target_x, target_y):
-        if current_x < target_x:
-            next_x = current_x + 1
-        elif current_x > target_x:
-            next_x = current_x - 1
-        else:
-            next_x = current_x
+    if not path:
+        print(f"No path found for {agent.getId()} to {target_treasure}.")
+        return
 
-        if current_y < target_y:
-            next_y = current_y + 1
-        elif current_y > target_y:
-            next_y = current_y - 1
-        else:
-            next_y = current_y
-
-        agent.move(current_x, current_y, next_x, next_y)
+    for next_pos in path:
+        next_x, next_y = next_pos
+        agent.move(current_pos[0], current_pos[1], next_x, next_y)
         draw_environment(screen, env, agents)
         pygame.time.wait(500)
-
-        current_x, current_y = next_x, next_y
+        current_pos = next_pos
 
     agent.open()
     draw_environment(screen, env, agents)
     pygame.time.wait(1000)
-
 def trash():
     pygame.init()
     env, agents = loadFileConfig("env1.txt")
@@ -193,6 +229,7 @@ def trash():
     assigned_treasures = set()
 
     def find_nearest_treasure(agent, treasures):
+        """Find the nearest unclaimed treasure for the agent."""
         agent_pos = agent.getPos()
         nearest_treasure = None
         min_distance = float('inf')
@@ -204,33 +241,97 @@ def trash():
                     min_distance = distance
         return nearest_treasure
 
-    def agent_protocol(agent, other_agent):
-        target_treasure = find_nearest_treasure(agent, locked_treasures)
+    def assign_target(agent, treasures):
+        """Assign the nearest unclaimed treasure to an agent."""
+        target_treasure = find_nearest_treasure(agent, treasures)
         if target_treasure is not None:
             assigned_treasures.add(target_treasure)
-            agent.send(other_agent.getId(), f"Target:{target_treasure}")
-            print(f"{agent.getId()} sent to {other_agent.getId()}: Target:{target_treasure}")
             return target_treasure
         return None
 
-    try:
-        agent0 = agents.get("agent0")
-        agent1 = agents.get("agent1")
+    def move_agent(agent, target, env):
+        """Move the agent one step closer to the target."""
+        if target is None:
+            return False  # No target, no movement
 
-        for _ in range(len(locked_treasures)):
-            target0 = agent_protocol(agent0, agent1)
-            if target0:
-                execute_agent_task(agent0, target0, screen, env, agents)
+        current_pos = agent.getPos()
+        path = a_star_search(current_pos, target, env)
 
-            target1 = agent_protocol(agent1, agent0)
-            if target1:
-                execute_agent_task(agent1, target1, screen, env, agents)
+        if not path:
+            return False  # No valid path to target
 
-    except Exception as e:
-        print(f"Error during execution: {e}")
+        next_pos = path[0]  # Get the next step in the path
+        agent.move(current_pos[0], current_pos[1], next_pos[0], next_pos[1])
+        return True
+
+    def broadcast_intention(agent, target, other_agent):
+        """Broadcast the agent's intention to the other agent."""
+        message = f"Intention: {target}"
+        agent.send(other_agent.getId(), message)
+        print(f"{agent.getId()} -> {other_agent.getId()}: {message}")
+
+    def resolve_conflict(agent, target):
+        """Check if the agent's target conflicts with another agent's intention."""
+        if target in assigned_treasures:
+            print(f"{agent.getId()}: Conflict detected for {target}. Recalculating target...")
+            assigned_treasures.remove(target)  # Release the target for reassignment
+            return assign_target(agent, locked_treasures)
+        return target
+
+    # Assign initial targets to agents
+    agent0 = agents.get("agent0")
+    agent1 = agents.get("agent1")
+    target0 = assign_target(agent0, locked_treasures)
+    target1 = assign_target(agent1, locked_treasures)
+
+    print(f"Initial targets: Agent0 -> {target0}, Agent1 -> {target1}")
+
+    # Main simulation loop
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        # Agents broadcast their intentions
+        broadcast_intention(agent0, target0, agent1)
+        broadcast_intention(agent1, target1, agent0)
+
+        # Resolve potential conflicts
+        target0 = resolve_conflict(agent0, target0)
+        target1 = resolve_conflict(agent1, target1)
+
+        # Move both agents toward their targets
+        agent0_moved = move_agent(agent0, target0, env)
+        agent1_moved = move_agent(agent1, target1, env)
+
+        # Check if agents reach their targets
+        if agent0.getPos() == target0:
+            agent0.open()
+            draw_environment(screen, env, agents)
+            locked_treasures.remove(target0)
+            assigned_treasures.remove(target0)
+            target0 = assign_target(agent0, locked_treasures)  # Assign a new target
+
+        if agent1.getPos() == target1:
+            agent1.open()
+            draw_environment(screen, env, agents)
+            locked_treasures.remove(target1)
+            assigned_treasures.remove(target1)
+            target1 = assign_target(agent1, locked_treasures)  # Assign a new target
+
+        # Redraw the environment after each step
+       
+        pygame.time.wait(200)
+
+        draw_environment(screen, env, agents)
+        clock.tick(FPS)
+
+        # Stop the simulation when there are no more treasures
+        if not locked_treasures:
+            running = False
 
     print("\nSimulation complete. Closing...")
-    pygame.quit()
-
+    pygame.quit() 
 if __name__ == "__main__":
     trash()
