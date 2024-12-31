@@ -17,13 +17,11 @@ MultiAgentTreasure is a simulation project that involves multiple agents interac
     git clone https://github.com/azizthiampro/MultiAgentTreasure.git
 
 2. Navigate to the project directory:
- 
-  cd MultiAgentTreasure
+   cd MultiAgentTreasure
 
 
 3. Install the required dependencies:
-  
-  pip install pygame
+   pip install pygame
 
 
 
