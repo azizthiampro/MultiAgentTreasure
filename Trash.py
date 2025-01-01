@@ -288,50 +288,56 @@ def trash():
 
     # Main simulation loop
     running = True
+    simulation_complete = False  # Flag to track if the simulation has ended
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
-        # Agents broadcast their intentions
-        broadcast_intention(agent0, target0, agent1)
-        broadcast_intention(agent1, target1, agent0)
+        if not simulation_complete:
+            # Agents broadcast their intentions
+            broadcast_intention(agent0, target0, agent1)
+            broadcast_intention(agent1, target1, agent0)
 
-        # Resolve potential conflicts
-        target0 = resolve_conflict(agent0, target0)
-        target1 = resolve_conflict(agent1, target1)
+            # Resolve potential conflicts
+            target0 = resolve_conflict(agent0, target0)
+            target1 = resolve_conflict(agent1, target1)
 
-        # Move both agents toward their targets
-        agent0_moved = move_agent(agent0, target0, env)
-        agent1_moved = move_agent(agent1, target1, env)
+            # Move both agents toward their targets
+            agent0_moved = move_agent(agent0, target0, env)
+            agent1_moved = move_agent(agent1, target1, env)
 
-        # Check if agents reach their targets
-        if agent0.getPos() == target0:
-            agent0.open()
+            # Check if agents reach their targets
+            if agent0.getPos() == target0:
+                agent0.open()
+                draw_environment(screen, env, agents)
+                locked_treasures.remove(target0)
+                assigned_treasures.remove(target0)
+                target0 = assign_target(agent0, locked_treasures)  # Assign a new target
+
+            if agent1.getPos() == target1:
+                agent1.open()
+                draw_environment(screen, env, agents)
+                locked_treasures.remove(target1)
+                assigned_treasures.remove(target1)
+                target1 = assign_target(agent1, locked_treasures)  # Assign a new target
+
+            # Redraw the environment after each step
+            pygame.time.wait(250)
+
             draw_environment(screen, env, agents)
-            locked_treasures.remove(target0)
-            assigned_treasures.remove(target0)
-            target0 = assign_target(agent0, locked_treasures)  # Assign a new target
+            clock.tick(FPS)
 
-        if agent1.getPos() == target1:
-            agent1.open()
-            draw_environment(screen, env, agents)
-            locked_treasures.remove(target1)
-            assigned_treasures.remove(target1)
-            target1 = assign_target(agent1, locked_treasures)  # Assign a new target
+            # Check if there are no more treasures
+            if not locked_treasures:
+                simulation_complete = True
+                print("\nSimulation complete. Waiting for user to close the game...")
 
-        # Redraw the environment after each step
-       
-        pygame.time.wait(200)
-
-        draw_environment(screen, env, agents)
-        clock.tick(FPS)
-
-        # Stop the simulation when there are no more treasures
-        if not locked_treasures:
-            running = False
-
-    print("\nSimulation complete. Closing...")
-    pygame.quit() 
+        else:
+            # Keep the screen open until the user quits
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False 
 if __name__ == "__main__":
     trash()
