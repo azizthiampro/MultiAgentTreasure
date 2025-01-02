@@ -10,12 +10,11 @@ from heapq import heappush, heappop
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-YELLOW = (255, 255, 0)
-RED = (255, 0, 0)
+RED = (225, 0, 0)
 BLUE = (0, 0, 255)
-GREEN = (0, 255, 0)
+GREEN = (0, 175, 0)
 GRAY = (200, 200, 200)
-ORANGE = (255, 165, 0)
+YELLOW = (255, 225, 0)
 
 CELL_SIZE = 55
 FPS = 10
@@ -157,6 +156,15 @@ def draw_environment(screen, env, agents):
 
     pygame.display.flip()
 
+def backPackFull( agent):
+    if isinstance(agent, MyAgentGold) and agent.backPack == agent.gold:
+        return True
+    elif isinstance(agent, MyAgentStones) and agent.backPack == agent.stone:    
+        return True
+    
+    return False
+
+
 def a_star_search(start, goal, env):
     def heuristic(a, b):
         dx = abs(a[0] - b[0])
@@ -233,6 +241,51 @@ def is_cell_free(env, x, y):
         if env.grilleTres[x][y] is not None:
             return False  # Occupied by a treasure
         return True  # Cell is free
+def move_to_depot_and_unload(agent, screen, env, agents):
+    """Move the agent to the depot, unload the backpack, and vacate the depot."""
+    depot_pos = env.posUnload
+    current_pos = agent.getPos()
+
+    # Find path to depot
+    path_to_depot = a_star_search(current_pos, depot_pos, env)
+
+    # Move step by step to the depot
+    for next_pos in path_to_depot:
+        next_x, next_y = next_pos
+        if not agent.move(current_pos[0], current_pos[1], next_x, next_y):
+            print(f"{agent.getId()} failed to move to depot.")
+            return
+        draw_environment(screen, env, agents)
+        pygame.time.wait(500)
+        current_pos = next_pos
+
+    # Unload items at depot
+    env.unload(agent)
+    print(f"{agent.getId()} unloaded items at the depot. Score updated to {env.score}")
+
+    # Reset the agent's carried treasure to 0
+    if isinstance(agent, MyAgentGold):
+        agent.gold = 0
+    elif isinstance(agent, MyAgentStones):
+        agent.stone = 0
+
+    # Find a free cell near the depot to vacate the depot
+    neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # Cardinal directions
+    vacated = False
+    for dx, dy in neighbors:
+        new_x, new_y = depot_pos[0] + dx, depot_pos[1] + dy
+        if is_cell_free(env, new_x, new_y):
+            if agent.move(depot_pos[0], depot_pos[1], new_x, new_y):
+                print(f"{agent.getId()} vacated the depot to ({new_x}, {new_y}).")
+                vacated = True
+                break
+
+    if not vacated:
+        print(f"{agent.getId()} could not vacate the depot due to lack of free cells.")
+
+    # Redraw environment to reflect changes
+    draw_environment(screen, env, agents)
+
 # Execute agent task with A*
 def execute_agent_task(agent, target_treasure, screen, env, agents):
     """Execute task: move the agent to the treasure cell and load it."""
@@ -262,7 +315,7 @@ def execute_agent_task(agent, target_treasure, screen, env, agents):
             return
 
         draw_environment(screen, env, agents)
-        pygame.time.wait(500)
+        pygame.time.wait(250)
         current_pos = next_pos
 
     # Attempt to load the treasure if in the correct cell
@@ -271,6 +324,12 @@ def execute_agent_task(agent, target_treasure, screen, env, agents):
             if agent.load(env):  # Mark treasure as collected if load is successful
                 print(f"{agent.getId()} successfully collected treasure at {target_treasure}.")
                 env.grilleTres[target_treasure[0]][target_treasure[1]] = None  # Mark treasure as collected
+
+            # Check if the agent's backpack is full
+            if backPackFull(agent):
+                print(f"{agent.getId()}'s backpack is full. Moving to depot to unload.")
+                move_to_depot_and_unload(agent, screen, env, agents)
+
         draw_environment(screen, env, agents)
     else:
         print(f"{agent.getId()} is not in the correct cell to load the treasure.")
@@ -391,6 +450,7 @@ def trash():
                     break
 
             execute_agent_task(chosen_agent, target, screen, opener.env, all_agents)
+            missionStatus(chosen_agent, all_agents, 1)
         else:
             print(f"No eligible agents to collect treasure at {target}.")
         # Example: Opener agent checking for status messages in the mailbox
