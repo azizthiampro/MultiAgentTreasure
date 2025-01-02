@@ -85,6 +85,23 @@ def display_agents_info(agents):
         print(f"Agent ID: {agent_id}, Type: {agent_type}, Position: {position}")
     print("-" * 30)
 
+def display_score(screen, env):
+    """Display the score in a horizontal block at the bottom of the screen."""
+    font = pygame.font.SysFont(None, 36)  # Larger font for the score
+    score_text = font.render(f"Score: {env.score}", True, BLACK)
+    screen_width = screen.get_width()
+
+    # Define the area for the score block
+    score_block_height = 50  # Height of the horizontal block
+    score_block_rect = pygame.Rect(0, screen.get_height() - score_block_height, screen_width, score_block_height)
+
+    # Fill the score block with a background color
+    pygame.draw.rect(screen, GRAY, score_block_rect)
+
+    # Render the score text
+    text_rect = score_text.get_rect(center=(screen_width // 2, screen.get_height() - score_block_height // 2))
+    screen.blit(score_text, text_rect)
+
 # Visualization
 def draw_environment(screen, env, agents):
     screen.fill(WHITE)
@@ -154,8 +171,10 @@ def draw_environment(screen, env, agents):
             remaining_rect = remaining_text.get_rect(center=(center[0] + offset_x, center[1] + offset_y))
             screen.blit(remaining_text, remaining_rect)
 
-    pygame.display.flip()
+    # Display the score in the horizontal block
+    display_score(screen, env)
 
+    pygame.display.flip()
 def backPackFull( agent):
     if isinstance(agent, MyAgentGold) and agent.backPack == agent.gold:
         return True
@@ -340,7 +359,10 @@ def trash():
     env, agents = loadFileConfig("env1.txt")
     display_agents_info(agents)
 
-    screen = pygame.display.set_mode((env.tailleY * CELL_SIZE, env.tailleX * CELL_SIZE))
+    # Calculate screen dimensions, reserving space for the score block
+    score_block_height = 50  # Height for the score block
+    screen_height = env.tailleX * CELL_SIZE + score_block_height
+    screen = pygame.display.set_mode((env.tailleY * CELL_SIZE, screen_height))
     pygame.display.set_caption("Multi-Agent Treasure Hunt")
     clock = pygame.time.Clock()
 
