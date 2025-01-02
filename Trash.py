@@ -17,7 +17,7 @@ GREEN = (0, 255, 0)
 GRAY = (200, 200, 200)
 ORANGE = (255, 165, 0)
 
-CELL_SIZE = 50
+CELL_SIZE = 55
 FPS = 10
 
 # Load configuration
@@ -89,7 +89,7 @@ def display_agents_info(agents):
 # Visualization
 def draw_environment(screen, env, agents):
     screen.fill(WHITE)
-    font = pygame.font.SysFont(None, 24)
+    font = pygame.font.SysFont(None, 18)  # Smaller font for capacity display
 
     # Draw grid
     for x in range(env.tailleX):
@@ -126,25 +126,37 @@ def draw_environment(screen, env, agents):
     for agent in agents.values():
         x, y = agent.getPos()
         center = (y * CELL_SIZE + CELL_SIZE // 2, x * CELL_SIZE + CELL_SIZE // 2)
+
         # Set color based on agent type
         if isinstance(agent, MyAgentGold):
             color = YELLOW
+            remaining_capacity = agent.backPack - agent.gold
         elif isinstance(agent, MyAgentStones):
             color = RED
+            remaining_capacity = agent.backPack - agent.stone
         else:
             color = BLUE
-        # Draw black outline
-        pygame.draw.circle(screen, BLACK, center, CELL_SIZE // 3 + 2)
-        pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
-        
+            remaining_capacity = None  # Chests don't have backpack capacity
+
+        # Draw agent circle with black outline
+        pygame.draw.circle(screen, BLACK, center, CELL_SIZE // 2.5 + 2)
+        pygame.draw.circle(screen, color, center, CELL_SIZE // 2.5)
+
         # Draw "A" for the agent
         agent_text = font.render("A", True, BLACK)
         text_rect = agent_text.get_rect(center=center)
         screen.blit(agent_text, text_rect)
 
+        # Draw remaining capacity in the top-right corner inside the circle
+        if remaining_capacity is not None:
+            remaining_text = font.render(str(remaining_capacity), True, BLACK)
+            offset_x = CELL_SIZE // 6  # Adjust to position it in the top-right
+            offset_y = -CELL_SIZE // 6
+            remaining_rect = remaining_text.get_rect(center=(center[0] + offset_x, center[1] + offset_y))
+            screen.blit(remaining_text, remaining_rect)
+
     pygame.display.flip()
 
-# A* Pathfinding
 def a_star_search(start, goal, env):
     def heuristic(a, b):
         dx = abs(a[0] - b[0])
@@ -175,10 +187,14 @@ def a_star_search(start, goal, env):
 
         for dx, dy in neighbors:
             neighbor = (current[0] + dx, current[1] + dy)
+
+            # Check boundaries
             if neighbor[0] < 0 or neighbor[0] >= env.tailleX or neighbor[1] < 0 or neighbor[1] >= env.tailleY:
                 continue
-            if env.grilleAgent[neighbor[0]][neighbor[1]] is not None:
-                continue
+
+            # Check for temporary obstacles (occupied cells)
+            if env.grilleAgent[neighbor[0]][neighbor[1]] is not None and neighbor != goal:
+                continue  # Allow the goal cell even if occupied (it will be cleared)
 
             tentative_g_score = g_score[current] + (1.414 if dx != 0 and dy != 0 else 1)
 
@@ -188,27 +204,78 @@ def a_star_search(start, goal, env):
                 f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
                 heappush(open_set, (f_score[neighbor], neighbor))
 
-    return []
+    return []  # No path found
 
+def move(self, agent, x1, y1, x2, y2):
+    if not (0 <= x2 < self.tailleX and 0 <= y2 < self.tailleY):
+        print("Invalid move: Out of bounds")
+        return False
+
+    if self.grilleAgent[x2][y2] is not None:
+        print("Invalid move: Cell occupied")
+        return False
+
+    if self.grilleAgent[x1][y1] == agent:
+        self.grilleAgent[x1][y1] = None  # Clear previous position
+        self.grilleAgent[x2][y2] = agent  # Move agent
+        agent.posX, agent.posY = x2, y2  # Update agent's internal position
+        return True
+
+    print("Invalid move: Agent not at the start position")
+    return False
+
+def is_cell_free(env, x, y):
+        """Check if a cell is free (not occupied by an agent or a treasure)."""
+        if not (0 <= x < env.tailleX and 0 <= y < env.tailleY):
+            return False  # Out of bounds
+        if env.grilleAgent[x][y] is not None:
+            return False  # Occupied by an agent
+        if env.grilleTres[x][y] is not None:
+            return False  # Occupied by a treasure
+        return True  # Cell is free
 # Execute agent task with A*
 def execute_agent_task(agent, target_treasure, screen, env, agents):
+    """Execute task: move the agent to the treasure cell and load it."""
+    if target_treasure is None:
+        print(f"No target assigned to {agent.getId()}.")
+        return
+
     current_pos = agent.getPos()
     path = a_star_search(current_pos, target_treasure, env)
 
     if not path:
         print(f"No path found for {agent.getId()} to {target_treasure}.")
-        return
+        return  # Skip if no valid path
 
+    # Move agent step by step to the treasure cell
     for next_pos in path:
         next_x, next_y = next_pos
-        agent.move(current_pos[0], current_pos[1], next_x, next_y)
+
+        # Check if the target cell is occupied
+        while env.grilleAgent[target_treasure[0]][target_treasure[1]] is not None:
+            print(f"{agent.getId()} is waiting for cell {target_treasure} to be free.")
+            pygame.time.wait(500)  # Wait for the opener to vacate the cell
+
+        # Move agent step by step
+        if not agent.move(current_pos[0], current_pos[1], next_x, next_y):
+            print(f"{agent.getId()} failed to move to ({next_x}, {next_y}).")
+            return
+
         draw_environment(screen, env, agents)
         pygame.time.wait(500)
         current_pos = next_pos
 
-    agent.open()
-    draw_environment(screen, env, agents)
-    pygame.time.wait(1000)
+    # Attempt to load the treasure if in the correct cell
+    if current_pos == target_treasure:
+        if isinstance(agent, (MyAgentGold, MyAgentStones)):
+            if agent.load(env):  # Mark treasure as collected if load is successful
+                print(f"{agent.getId()} successfully collected treasure at {target_treasure}.")
+                env.grilleTres[target_treasure[0]][target_treasure[1]] = None  # Mark treasure as collected
+        draw_environment(screen, env, agents)
+    else:
+        print(f"{agent.getId()} is not in the correct cell to load the treasure.")
+
+# Main simulation
 def trash():
     pygame.init()
     env, agents = loadFileConfig("env1.txt")
@@ -243,6 +310,8 @@ def trash():
 
     def assign_target(agent, treasures):
         """Assign the nearest unclaimed treasure to an agent."""
+        if not treasures:
+            return None  # No treasures to assign
         target_treasure = find_nearest_treasure(agent, treasures)
         if target_treasure is not None:
             assigned_treasures.add(target_treasure)
@@ -258,25 +327,115 @@ def trash():
         path = a_star_search(current_pos, target, env)
 
         if not path:
+            print(f"No valid path for {agent.getId()} to {target}.")
             return False  # No valid path to target
 
         next_pos = path[0]  # Get the next step in the path
         agent.move(current_pos[0], current_pos[1], next_pos[0], next_pos[1])
         return True
+    
+    def missionStatus(agent, all_agents, flag):
+        """Broadcast their status mission to all other agents."""
+        id = agent.getId()
 
-    def broadcast_intention(agent, target, other_agent):
-        """Broadcast the agent's intention to the other agent."""
-        message = f"Intention: {target}"
-        agent.send(other_agent.getId(), message)
-        print(f"{agent.getId()} -> {other_agent.getId()}: {message}")
+        if flag == 0:
+           message = f"Status {id}: Progress"
+        elif flag == 1:
+            message = f"Status {id}: Completed"
 
-    def resolve_conflict(agent, target):
-        """Check if the agent's target conflicts with another agent's intention."""
-        if target in assigned_treasures:
-            print(f"{agent.getId()}: Conflict detected for {target}. Recalculating target...")
-            assigned_treasures.remove(target)  # Release the target for reassignment
-            return assign_target(agent, locked_treasures)
-        return target
+        for other_agent in all_agents.values():
+            if other_agent.getId() != agent.getId():
+                agent.send(other_agent.getId(), message)
+                print(f"{agent.getId()} -> {other_agent.getId()}: {message}")
+
+    def broadcast_intention(agent, target, all_agents):
+        if target is None:
+            return  # Skip if no target
+
+        # Check for agents with progress status
+        progress_agents = check_for_progress_status(agent)
+
+        treasure_type = agent.env.grilleTres[target[0]][target[1]].getType() if agent.env.grilleTres[target[0]][target[1]] else None
+        message = f"Intention: Open {target} Type {treasure_type}"
+        
+        for other_agent in all_agents.values():
+            if other_agent.getId() in progress_agents:
+                print(f"{agent.getId()} skipped sending intention to {other_agent.getId()} (status=progress).")
+                continue
+            if other_agent.getId() != agent.getId():
+                agent.send(other_agent.getId(), message)
+                print(f"{agent.getId()} -> {other_agent.getId()}: {message}")
+                
+    def notify_treasure_unlocked(opener, target, all_agents):
+        """Notify relevant agents and assign the collection task."""
+        if target is None:
+            return  # Skip if no target
+
+        treasure_type = opener.env.grilleTres[target[0]][target[1]].getType()
+        print(f"{opener.getId()} unlocked treasure at {target}.")
+
+        # Resolve conflict and choose the best agent for collection
+        chosen_agent = resolve_collection_conflict(treasure_type, target, all_agents, opener.env)
+
+        if chosen_agent:
+            print(f"{chosen_agent.getId()} is assigned to collect treasure at {target}.")
+            missionStatus(chosen_agent, all_agents, 0)
+
+            # Attempt to vacate the cell for the collector
+            neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+            for dx, dy in neighbors:
+                new_x, new_y = target[0] + dx, target[1] + dy
+                if is_cell_free(opener.env, new_x, new_y):
+                    opener.move(target[0], target[1], new_x, new_y)
+                    print(f"{opener.getId()} vacated cell {target} for {chosen_agent.getId()}.")
+                    break
+
+            execute_agent_task(chosen_agent, target, screen, opener.env, all_agents)
+        else:
+            print(f"No eligible agents to collect treasure at {target}.")
+        # Example: Opener agent checking for status messages in the mailbox
+    def check_for_progress_status(agent):
+        progress_agents = set()
+        
+        # Check all messages in the mailbox
+        while agent.mailBox:
+            sender, content = agent.readMail()
+            if "Status" in content and "Progress" in content:
+                parts = content.split(":")
+                if len(parts) > 1:
+                    progress_agents.add(parts[0].split()[1])  # Extract the agent ID from the message
+        
+        return progress_agents
+    
+
+
+    def resolve_collection_conflict(treasure_type, target, all_agents, env):
+        """Determine which agent should collect the treasure."""
+        relevant_agents = [
+            agent for agent in all_agents.values()
+            if (isinstance(agent, MyAgentGold) and treasure_type == 1 and agent.backPack - agent.gold > 0) or
+               (isinstance(agent, MyAgentStones) and treasure_type == 2 and agent.backPack - agent.stone > 0)
+        ]
+
+        if not relevant_agents:
+            print(f"No eligible agents to collect treasure at {target}.")
+            return None
+
+        # Determine the closest eligible agent
+        chosen_agent = None
+        min_distance = float('inf')
+
+        for agent in relevant_agents:
+            agent_pos = agent.getPos()
+            distance = abs(agent_pos[0] - target[0]) + abs(agent_pos[1] - target[1])
+            if distance < min_distance:
+                chosen_agent = agent
+                min_distance = distance
+            elif distance == min_distance:  # Tie-breaking
+                if chosen_agent and agent.getId() < chosen_agent.getId():
+                    chosen_agent = agent
+
+        return chosen_agent
 
     # Assign initial targets to agents
     agent0 = agents.get("agent0")
@@ -297,35 +456,38 @@ def trash():
 
         if not simulation_complete:
             # Agents broadcast their intentions
-            broadcast_intention(agent0, target0, agent1)
-            broadcast_intention(agent1, target1, agent0)
+            broadcast_intention(agent0, target0, agents)
+            broadcast_intention(agent1, target1, agents)
 
-            # Resolve potential conflicts
-            target0 = resolve_conflict(agent0, target0)
-            target1 = resolve_conflict(agent1, target1)
-
-            # Move both agents toward their targets
+            # Move both opener agents toward their targets
             agent0_moved = move_agent(agent0, target0, env)
             agent1_moved = move_agent(agent1, target1, env)
 
-            # Check if agents reach their targets
+            # Check if opener agents reach their targets
             if agent0.getPos() == target0:
-                agent0.open()
-                draw_environment(screen, env, agents)
-                locked_treasures.remove(target0)
-                assigned_treasures.remove(target0)
+                agent0.open()  # Perform the opening action
+                draw_environment(screen, env, agents)  # Update the display to reflect the opening
+                pygame.time.wait(500)  # Pause briefly to show the opener's state
+                notify_treasure_unlocked(agent0, target0, agents)
+                draw_environment(screen, env, agents)  # Update display after unlocking
+                if target0 in locked_treasures:
+                    locked_treasures.remove(target0)
+                assigned_treasures.discard(target0)
                 target0 = assign_target(agent0, locked_treasures)  # Assign a new target
 
             if agent1.getPos() == target1:
-                agent1.open()
-                draw_environment(screen, env, agents)
-                locked_treasures.remove(target1)
-                assigned_treasures.remove(target1)
+                agent1.open()  # Perform the opening action
+                draw_environment(screen, env, agents)  # Update the display to reflect the opening
+                pygame.time.wait(500)  # Pause briefly to show the opener's state
+                notify_treasure_unlocked(agent1, target1, agents)
+                draw_environment(screen, env, agents)  # Update display after unlocking
+                if target1 in locked_treasures:
+                    locked_treasures.remove(target1)
+                assigned_treasures.discard(target1)
                 target1 = assign_target(agent1, locked_treasures)  # Assign a new target
 
             # Redraw the environment after each step
             pygame.time.wait(250)
-
             draw_environment(screen, env, agents)
             clock.tick(FPS)
 
@@ -338,6 +500,9 @@ def trash():
             # Keep the screen open until the user quits
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    running = False 
+                    running = False
+
+    print("\nGame closed.")
+    pygame.quit()
 if __name__ == "__main__":
     trash()
