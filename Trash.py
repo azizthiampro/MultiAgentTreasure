@@ -88,7 +88,7 @@ def display_agents_info(agents):
 def display_score(screen, env):
     """Display the score in a horizontal block at the bottom of the screen."""
     font = pygame.font.SysFont(None, 36)  # Larger font for the score
-    score_text = font.render(f"Score: {env.score}", True, BLACK)
+    score_text = font.render(f"Score: {env.score}", True, WHITE)
     screen_width = screen.get_width()
 
     # Define the area for the score block
@@ -96,7 +96,7 @@ def display_score(screen, env):
     score_block_rect = pygame.Rect(0, screen.get_height() - score_block_height, screen_width, score_block_height)
 
     # Fill the score block with a background color
-    pygame.draw.rect(screen, GRAY, score_block_rect)
+    pygame.draw.rect(screen, BLACK, score_block_rect)
 
     # Render the score text
     text_rect = score_text.get_rect(center=(screen_width // 2, screen.get_height() - score_block_height // 2))
@@ -334,7 +334,6 @@ def execute_agent_task(agent, target_treasure, screen, env, agents):
             return
 
         draw_environment(screen, env, agents)
-        pygame.time.wait(250)
         current_pos = next_pos
 
     # Attempt to load the treasure if in the correct cell
@@ -353,6 +352,7 @@ def execute_agent_task(agent, target_treasure, screen, env, agents):
     else:
         print(f"{agent.getId()} is not in the correct cell to load the treasure.")
 
+# Main simulation
 # Main simulation
 def trash():
     pygame.init()
@@ -530,6 +530,7 @@ def trash():
     # Main simulation loop
     running = True
     simulation_complete = False  # Flag to track if the simulation has ended
+    last_treasure_generation_time = pygame.time.get_ticks()  # Initialize the timer
 
     while running:
         for event in pygame.event.get():
@@ -549,7 +550,7 @@ def trash():
             if agent0.getPos() == target0:
                 agent0.open()  # Perform the opening action
                 draw_environment(screen, env, agents)  # Update the display to reflect the opening
-                pygame.time.wait(500)  # Pause briefly to show the opener's state
+                pygame.time.wait(400)  # Pause briefly to show the opener's state
                 notify_treasure_unlocked(agent0, target0, agents)
                 draw_environment(screen, env, agents)  # Update display after unlocking
                 if target0 in locked_treasures:
@@ -560,13 +561,30 @@ def trash():
             if agent1.getPos() == target1:
                 agent1.open()  # Perform the opening action
                 draw_environment(screen, env, agents)  # Update the display to reflect the opening
-                pygame.time.wait(500)  # Pause briefly to show the opener's state
+                pygame.time.wait(400)  # Pause briefly to show the opener's state
                 notify_treasure_unlocked(agent1, target1, agents)
                 draw_environment(screen, env, agents)  # Update display after unlocking
                 if target1 in locked_treasures:
                     locked_treasures.remove(target1)
                 assigned_treasures.discard(target1)
                 target1 = assign_target(agent1, locked_treasures)  # Assign a new target
+
+            # Generate new treasures every 15 seconds
+            current_time = pygame.time.get_ticks()
+            if current_time - last_treasure_generation_time >= 6000:  # 15000 milliseconds = 15 seconds
+                env.gen_new_treasures(random.randint(0, 5), 7)
+                last_treasure_generation_time = current_time
+                print("New treasures generated.")
+
+                # Dynamically update locked_treasures list
+                locked_treasures = [
+                    (x, y) for x in range(env.tailleX) for y in range(env.tailleY)
+                    if env.grilleTres[x][y] is not None and not env.grilleTres[x][y].isOpen()
+                ]
+
+                # Reassign targets dynamically
+                target0 = assign_target(agent0, locked_treasures)
+                target1 = assign_target(agent1, locked_treasures)
 
             # Redraw the environment after each step
             pygame.time.wait(250)
@@ -586,5 +604,7 @@ def trash():
 
     print("\nGame closed.")
     pygame.quit()
+
 if __name__ == "__main__":
     trash()
+
