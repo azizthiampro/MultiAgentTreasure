@@ -9,7 +9,7 @@ Multi-Agent Treasure Hunt is a simulation project that involves multiple agents 
   - **Chest Opener**: Opens chests to make treasures available for collection.
   - **Gold Picker**: Collects gold treasures.
   - **Stones Picker**: Collects stone treasures.
-- **Visualization**: The environment and agents are visualized using Pygame, with a grid representing the environment and circles representing the agents.
+- **Visualization**: The environment and agents are visualized using Pygame.
 - **Messaging System**: Agents can send messages to each other, facilitating communication and coordination.
 
 ## Installation
