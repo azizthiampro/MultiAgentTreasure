@@ -1,0 +1,201 @@
+import heapq
+from MyAgent import MyAgent
+
+class MyAgentChest(MyAgent):
+    def __init__(self, id, initX, initY, env):
+        super().__init__(id, initX, initY, env)
+        self.target_chest = None  
+        self.received_intentions = {}  
+        self.intention_sent = False  
+        self.zone = self.assign_zone()
+
+    def getType(self):
+        return 0  
+
+    def assign_zone(self):
+        """Assigns an initial zone based on the agent's starting position."""
+        zone_width = self.env.tailleX // 2
+        zone_height = self.env.tailleY // 2
+
+        if self.posX < zone_width and self.posY < zone_height:
+            return 1  # Top-left
+        elif self.posX < zone_width and self.posY >= zone_height:
+            return 2  # Top-right
+        elif self.posX >= zone_width and self.posY < zone_height:
+            return 3  # Bottom-left
+        else:
+            return 4  # Bottom-right
+
+    def open(self):
+        """Opens a chest if one is at the agent's position."""
+        if self.env.grilleTres[self.posX][self.posY] is not None:
+            self.env.open(self, self.posX, self.posY)
+            print(f"{self.getId()} opened a chest at ({self.posX}, {self.posY})")
+            self.target_chest = None  
+            self.intention_sent = False  
+
+    def find_nearest_chest(self, assigned_chests):
+        """Finds the nearest unopened chest, prioritizing the agent's own zone first."""
+        all_unopened_chests = [
+            (x, y) for x in range(self.env.tailleX) for y in range(self.env.tailleY)
+            if self.env.grilleTres[x][y] is not None
+            and not self.env.grilleTres[x][y].isOpen()
+        ]
+        
+        zone_chests = [chest for chest in all_unopened_chests if self.get_zone(chest[0], chest[1]) == self.zone]
+        available_zone_chests = [chest for chest in zone_chests if chest not in assigned_chests]
+
+        if available_zone_chests:
+            return min(available_zone_chests, key=lambda c: abs(self.posX - c[0]) + abs(self.posY - c[1]))
+
+        if all_unopened_chests:
+            return min(all_unopened_chests, key=lambda c: abs(self.posX - c[0]) + abs(self.posY - c[1]))
+
+        return None  
+
+    def get_zone(self, x, y):
+        """Determines the zone a position belongs to."""
+        zone_width = self.env.tailleX // 2
+        zone_height = self.env.tailleY // 2
+
+        if x < zone_width and y < zone_height:
+            return 1  
+        elif x < zone_width and y >= zone_height:
+            return 2  
+        elif x >= zone_width and y < zone_height:
+            return 3  
+        else:
+            return 4  
+
+    def share_intention(self):
+        """Shares intention using `.send()` (like example)."""
+        if self.target_chest and not self.intention_sent:
+            distance = abs(self.posX - self.target_chest[0]) + abs(self.posY - self.target_chest[1])
+            message = f"INTENTION {self.target_chest[0]} {self.target_chest[1]} {distance} {self.zone}"
+            
+            for agent in self.env.agentSet.values():
+                if isinstance(agent, MyAgentChest) and agent.getId() != self.getId():
+                    self.send(agent.getId(), message)
+                    print(f"[MESSAGE] {self.getId()} -> {agent.getId()}: {message}")
+            
+            self.intention_sent = True  
+
+    def read_intentions(self):
+        """Reads messages using `.readMail()`."""
+        while self.mailBox:
+            sender, content = self.readMail()
+            parts = content.split()
+            if parts[0] == "INTENTION":
+                x, y, distance, zone = int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])
+                self.received_intentions[sender] = (x, y, distance, zone)
+                print(f"[RECEIVED] {self.getId()} <- {sender}: Target Chest ({x}, {y}), Distance {distance}, Zone {zone}")
+
+    def resolve_conflicts(self):
+        """Ensures that only one agent targets a chest per zone."""
+        if self.target_chest is None:
+            return  
+
+        target_x, target_y = self.target_chest
+        my_distance = abs(self.posX - target_x) + abs(self.posY - target_y)
+
+        conflicts = [(sender, data[2]) for sender, data in self.received_intentions.items() if data[:2] == (target_x, target_y)]
+
+        if conflicts:
+            conflicts.append((self.getId(), my_distance))
+            conflicts.sort(key=lambda x: x[1])  
+
+            winner = conflicts[0][0]  
+
+            if winner != self.getId():
+                print(f"[CONFLICT] {self.getId()} lost target {self.target_chest} to {winner}. Finding a new chest.")
+                self.target_chest = self.find_nearest_chest({})
+                self.intention_sent = False  
+
+    def move_toward_target(self):
+        """Moves toward the target chest while dynamically handling conflicts."""
+        self.read_intentions()  
+        self.resolve_conflicts()  
+
+        if not self.target_chest:
+            print(f"[INFO] {self.getId()} has no available targets. Finding a new one...")
+            self.target_chest = self.find_nearest_chest({})
+            self.intention_sent = False  
+            return  
+
+        target_x, target_y = self.target_chest
+        path = self.a_star_pathfinding((self.posX, self.posY), (target_x, target_y))  
+
+        if not path:
+            print(f"[INFO] {self.getId()} could not find a path to ({target_x}, {target_y}). Switching target.")
+            self.target_chest = self.find_nearest_chest({})
+            self.intention_sent = False
+            return
+
+        next_x, next_y = path.pop(0)
+
+        if self.env.grilleAgent[next_x][next_y] is None:
+            self.move(self.posX, self.posY, next_x, next_y)
+        else:
+            print(f"[BLOCKED] {self.getId()} is blocked at ({next_x}, {next_y}). Switching target.")
+            self.target_chest = self.find_nearest_chest({})
+            self.intention_sent = False  
+
+        if (self.posX, self.posY) == (target_x, target_y):
+            self.open()
+
+    def a_star_pathfinding(self, start, goal):
+        """Finds the shortest path avoiding obstacles using A*."""
+        def heuristic(a, b):
+            """Manhattan distance heuristic"""
+            return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+        neighbors = [
+            (-1, 0), (1, 0), (0, -1), (0, 1),  
+            (-1, -1), (-1, 1), (1, -1), (1, 1)  
+        ]
+
+        open_set = []
+        heapq.heappush(open_set, (0, start))
+        came_from = {}
+        g_score = {start: 0}
+        f_score = {start: heuristic(start, goal)}
+
+        while open_set:
+            _, current = heapq.heappop(open_set)
+
+            if current == goal:
+                path = []
+                while current in came_from:
+                    path.append(current)
+                    current = came_from[current]
+                path.reverse()
+                return path  
+
+            for dx, dy in neighbors:
+                neighbor = (current[0] + dx, current[1] + dy)
+
+                if neighbor[0] < 0 or neighbor[0] >= self.env.tailleX or neighbor[1] < 0 or neighbor[1] >= self.env.tailleY:
+                    continue
+
+                if self.env.grilleAgent[neighbor[0]][neighbor[1]] is not None and neighbor != goal:
+                    continue  
+
+                tentative_g_score = g_score[current] + (1.414 if dx != 0 and dy != 0 else 1)
+
+                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g_score
+                    f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
+                    heapq.heappush(open_set, (f_score[neighbor], neighbor))
+
+        return []  
+        
+    def read_intentions(self):
+        """Reads messages using `.readMail()` and updates received intentions."""
+        while self.mailBox:
+            sender, content = self.readMail()
+            parts = content.split()
+            if parts[0] == "INTENTION":
+                x, y, distance, zone = int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])
+                self.received_intentions[sender] = (x, y, distance, zone)
+                print(f"[RECEIVED] {self.getId()} <- {sender}: Target Chest ({x}, {y}), Distance {distance}, Zone {zone}")

@@ -11,6 +11,7 @@ class MyAgent:
         self.posX = initX
         self.posY = initY
         self.env = env
+
         self.mailBox = []
 
     def __eq__(self, other):
@@ -56,14 +57,6 @@ class MyAgent:
     def send(self, idReceiver, textContent):
         self.env.send(self.id, idReceiver, textContent)
 
-    # Broadcast the agent's position to all other agents
-    def broadcastPosition(self):
-        """Broadcast the agent's position to all other agents."""
-        for agent_id in self.env.agentSet.keys():
-            if agent_id != self.id:  # Don't send the position to itself
-                self.send(agent_id, f"POS:{self.getPos()}")
-
- 
 
 
     def __str__(self):

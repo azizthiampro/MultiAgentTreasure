@@ -67,7 +67,6 @@ class Environment:
     # make an agent load some treasure
     def load(self, agent ):
         x , y = agent.getPos()
-
         if(self.grilleTres[x][y] != None  and self.grilleTres[x][y].getType() == agent.getType() ) :
             print("load OK")
             agent.addTreasure(self.grilleTres[x][y].getValue())
@@ -80,13 +79,17 @@ class Environment:
         self.agentSet[idReceiver].receive(idSender, textContent)
 
     def gen_new_treasures(self, nb, maxVal):
-        for i in range(nb) :
-            x = random.randint(0,self.tailleX - 1)
-            y = random.randint(0,self.tailleY - 1)
-            t = random.randint(0,1)
+        """Generates new treasures randomly in the environment."""
+        for i in range(nb):
+            x = random.randint(0, self.tailleX - 1)
+            y = random.randint(0, self.tailleY - 1)
+            t = random.choice([1, 2])  # 1 = Gold, 2 = Stone
             v = random.randint(1, maxVal)
-            print("new tres at", x, y)
-            self.addTreasure(Treasure(t,v), x, y)
+
+            self.addTreasure(Treasure(t, v), x, y)
+            print(f"New treasure generated at ({x}, {y}) -> {'Gold' if t == 1 else 'Stone'} ({v} value)")
+
+
 
 
     def __str__(self):
