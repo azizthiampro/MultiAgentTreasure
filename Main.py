@@ -74,9 +74,9 @@ def main():
         for opener in openers:
             chest_policy(opener, gui)
         for gold_agent in gold_agents:
-            gold_policy(gold_agent)
+            gold_policy(gold_agent,gui)
         for stone_agent in stone_agents:
-            stone_policy(stone_agent)
+            stone_policy(stone_agent,gui)
 
         gui.update_display()
 

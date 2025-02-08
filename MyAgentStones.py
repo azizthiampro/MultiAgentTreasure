@@ -14,16 +14,21 @@ class MyAgentStones(MyAgent):
         return self.stone
 
     # Unload stones at the depot
-    def unload(self):
-        """Unload stones at the depot if at the unload position."""
-        if (self.posX, self.posY) == self.env.posUnload:
-            self.env.unload(self)
-            print(f"[UNLOAD] {self.getId()} unloaded {self.stone} stones at depot.")
-            self.myagentScore=self.myagentScore+self.stone
+    def unload(self, gui=None):
+            """Unload stones at the depot if at the unload position."""
+            if (self.posX, self.posY) == self.env.posUnload:
+                amount_unloaded = self.stone
+                self.env.unload(self)
+                print(f"[UNLOAD] {self.getId()} unloaded {amount_unloaded} stones at depot.")
+                self.myagentScore += amount_unloaded
+                self.stone = 0
 
-            self.stone = 0  # Reset backpack
-        else:
-            print(f"[MOVE TO DEPOT] {self.getId()} moving to unload stones.")
+                # Trigger floating text if GUI is provided
+                if gui:
+                    gui.add_floating_text(amount_unloaded, (self.posX, self.posY))
+            else:
+                print(f"[MOVE TO DEPOT] {self.getId()} moving to unload stones.")
+
 
     # Return agent type (2 for stones)
     def getType(self):
@@ -173,7 +178,7 @@ class MyAgentStones(MyAgent):
         return f"agent Stone {self.id} ({self.posX}, {self.posY})"
     
 
-def stone_policy(stone_agent):
+def stone_policy(stone_agent,gui):
     """Executes the stone collection policy for a stone agent."""
     print(f"[POLICY] Processing {stone_agent.getId()} at {stone_agent.getPos()}")
 
@@ -181,7 +186,7 @@ def stone_policy(stone_agent):
     if (stone_agent.posX, stone_agent.posY) == stone_agent.env.posUnload:
         if stone_agent.stone > 0:
             print(f"[UNLOADING] {stone_agent.getId()} unloading at depot...")
-            stone_agent.unload()  # ✅ Unloads stones
+            stone_agent.unload(gui)  # ✅ Unloads stones
             print(f"[UNLOADED] {stone_agent.getId()} is now empty and ready to collect more stone.")
         else:
             print(f"[INFO] {stone_agent.getId()} is at depot but backpack is empty.")

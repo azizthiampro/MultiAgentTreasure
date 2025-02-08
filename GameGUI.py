@@ -34,6 +34,8 @@ class GameGUI:
         self.font = pygame.font.SysFont(None, 18)
         self.chat_font = pygame.font.SysFont(None, 20)
         self.score_font = pygame.font.SysFont(None, 24, bold=True)
+        self.floating_texts = []
+
 
         self.chat_log = []
         self.max_chat_lines = 8  # Increased to show more final results
@@ -167,8 +169,17 @@ class GameGUI:
         self.draw_grid()
         self.draw_objects()
         self.draw_chat_window()
+
+        # Update and draw floating texts
+        for text in self.floating_texts[:]:
+            text.update()
+            text.draw(self.screen, self.font)
+            if not text.is_alive():
+                self.floating_texts.remove(text)
+
         pygame.display.flip()
         self.clock.tick(FPS)
+
 
     def run_gui(self):
         running = True
@@ -201,3 +212,29 @@ class GameGUI:
             if not game_over_displayed:
                 self.show_game_over_popup()
                 game_over_displayed = True  # Ensure popup shows only once
+
+    def add_floating_text(self, text, position):
+        """Adds a floating text effect near the depot."""
+        screen_x = position[1] * CELL_WIDTH
+        screen_y = position[0] * CELL_HEIGHT
+        self.floating_texts.append(FloatingText(f"+{text}", (screen_x + CELL_WIDTH // 2, screen_y)))
+
+class FloatingText:
+    def __init__(self, text, pos, color=BLACK, lifespan=60):
+        self.text = text
+        self.pos = list(pos)  # [x, y]
+        self.color = color
+        self.lifespan = lifespan  # Frames until disappearance
+        self.age = 0
+
+    def update(self):
+        self.pos[1] -= 1  # Move upward
+        self.age += 1
+
+    def is_alive(self):
+        return self.age < self.lifespan
+
+    def draw(self, surface, font):
+        if self.is_alive():
+            text_surface = font.render(self.text, True, self.color)
+            surface.blit(text_surface, self.pos)

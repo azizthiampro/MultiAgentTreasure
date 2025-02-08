@@ -13,16 +13,22 @@ class MyAgentGold(MyAgent):
     def getTreasure(self):
         return self.gold
 
-    # Unload golds at the depot
-    def unload(self):
+        # Unload golds at the depot
+    def unload(self, gui=None):
         """Unload golds at the depot if at the unload position."""
         if (self.posX, self.posY) == self.env.posUnload:
+            amount_unloaded = self.gold
             self.env.unload(self)
-            print(f"[UNLOAD] {self.getId()} unloaded {self.gold} golds at depot.")
-            self.myagentScore=self.myagentScore+self.gold
-            self.gold = 0  # Reset backpack
+            print(f"[UNLOAD] {self.getId()} unloaded {amount_unloaded} golds at depot.")
+            self.myagentScore += amount_unloaded
+            self.gold = 0
+
+            # Trigger floating text if GUI is provided
+            if gui:
+                gui.add_floating_text(amount_unloaded, (self.posX, self.posY))
         else:
             print(f"[MOVE TO DEPOT] {self.getId()} moving to unload golds.")
+
 
     # Return agent type (2 for golds)
     def getType(self):
@@ -172,7 +178,7 @@ class MyAgentGold(MyAgent):
     def __str__(self):
         return f"agent gold {self.id} ({self.posX}, {self.posY})"
 
-def gold_policy(gold_agent):
+def gold_policy(gold_agent,gui):
     """Executes the gold collection policy for a gold agent."""
     print(f"[POLICY] Processing {gold_agent.getId()} at {gold_agent.getPos()}")
 
@@ -180,7 +186,7 @@ def gold_policy(gold_agent):
     if (gold_agent.posX, gold_agent.posY) == gold_agent.env.posUnload:
         if gold_agent.gold > 0:
             print(f"[UNLOADING] {gold_agent.getId()} unloading at depot...")
-            gold_agent.unload()  # ✅ Unloads golds
+            gold_agent.unload(gui)  # ✅ Unloads golds
             print(f"[UNLOADED] {gold_agent.getId()} is now empty and ready to collect more gold.")
         else:
             print(f"[INFO] {gold_agent.getId()} is at depot but backpack is empty.")
