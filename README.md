@@ -14,7 +14,7 @@ Multi-Agent Treasure Hunt is a simulation project that involves multiple agents 
 
 ## Installation
 1. Clone the repository:
-   git clone https://github.com/yourusername/MultiAgentTreasureHunt.git
+   git clone https://github.com/azizthiampro/MultiAgentTreasureHunt.git
 2. Navigate to the project directory:
    cd MultiAgentTreasure
 3. pip install -r requirements.txt
