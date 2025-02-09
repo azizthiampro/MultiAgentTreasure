@@ -18,3 +18,5 @@ Multi-Agent Treasure Hunt is a simulation project that involves multiple agents 
 2. Navigate to the project directory:
    cd MultiAgentTreasure
 3. pip install -r requirements.txt
+4. python main.py
+   
