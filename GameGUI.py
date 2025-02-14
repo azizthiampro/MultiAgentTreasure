@@ -136,7 +136,7 @@ class GameGUI:
         pygame.draw.rect(overlay, BLUE, popup_rect, 5, border_radius=12)  # Blue border
 
         # Game Over Text
-        game_over_text = self.score_font.render("GAME OVER - Last Horizon", True, BLACK)
+        game_over_text = self.score_font.render("GAME OVER - Details on Terminal ", True, BLACK)
         text_rect = game_over_text.get_rect(center=(self.width // 2, popup_y + 50))
         overlay.blit(game_over_text, text_rect)
 
