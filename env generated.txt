@@ -1,0 +1,27 @@
+#taille env
+15 15
+# position depot
+7 7
+# tresors tres:type:posX:posY:value
+tres:or:2:12:5
+tres:pierres:4:5:4
+tres:or:3:8:3
+tres:pierres:5:14:7
+tres:or:6:3:2
+tres:pierres:8:1:6
+tres:pierres:9:10:5
+tres:or:11:4:8
+tres:pierres:12:7:3
+tres:or:14:13:4
+tres:pierres:2:2:5
+tres:or:4:11:6
+tres:or:10:10:7
+tres:pierres:13:5:4
+
+#agents AG:type:posX:posY:backpack
+AG:ouvr:6:9
+AG:ouvr:8:3
+AG:pierres:5:4:10
+AG:pierres:9:12:12
+AG:or:3:6:8
+AG:or:13:10:15
